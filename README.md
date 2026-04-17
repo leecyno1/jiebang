@@ -245,4 +245,4 @@ cd "$tmp/project"
 
 ## License
 
-Add a license before publishing this as a public dependency or marketplace package.
+MIT. See [LICENSE](LICENSE).
