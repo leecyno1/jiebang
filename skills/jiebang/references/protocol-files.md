@@ -12,8 +12,11 @@
     decision-log.md
     handoffs/
       cc.md
+      cc.auto.md
       cx.md
+      cx.auto.md
       ag.md
+      ag.auto.md
     sessions/
       cc.md
       cx.md
@@ -22,7 +25,7 @@
 
 ## Handoff Schema
 
-Each `handoffs/{agent}.md` should use this shape:
+Each manual `handoffs/{agent}.md` should use this shape:
 
 ```markdown
 ---
@@ -60,6 +63,8 @@ mode: manual|auto
 - `current-task.md` should represent only the active task
 - `decision-log.md` should hold durable decisions, not chat fragments
 - `handoffs/*.md` should be short and actionable
+- `handoffs/*.auto.md` are machine-generated fallback snapshots
 - `sessions/*.md` can be noisy and detailed because they are fallback context
-- `handoffs/*.md` may be updated by both manual `交棒` and automatic snapshots
+- manual `交棒` owns `handoffs/{agent}.md`
+- automatic snapshots own `handoffs/{agent}.auto.md`
 - automatic snapshots should include a timestamp and clear marker when the summary is machine-generated

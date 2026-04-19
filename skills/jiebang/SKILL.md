@@ -18,7 +18,7 @@ Use this skill when the user wants to:
 
 1. Load `.jiebang/manifest.yml` first.
 2. Never claim to know another agent's private chat history unless it was persisted in `.jiebang/runtime/`.
-3. Treat `.jiebang/runtime/handoffs/*.md` as the source of truth for agent-to-agent transfer.
+3. Treat `.jiebang/runtime/handoffs/*.md` as the authoritative manual handoff and `.jiebang/runtime/handoffs/*.auto.md` as autosave fallback only.
 4. Keep root instruction files stable; write dynamic progress into runtime files instead.
 5. Never rewrite existing `CLAUDE.md`, `AGENTS.md`, or other project instruction files. Only append a bounded hook when the user explicitly asks for `bootstrap --update-agents`.
 6. When bootstrapping a project, use the templates bundled in this skill's `assets/` directory and never overwrite existing `.jiebang` files.
@@ -31,10 +31,11 @@ Use this skill when the user wants to:
 2. Read `.jiebang/runtime/project.md`
 3. Read `.jiebang/runtime/current-task.md`
 4. Read `.jiebang/runtime/decision-log.md`
-5. Read the source agent handoff file
-6. If the handoff is too thin, read the source session log
-7. Read `AGENTS.md` only when project-level rules are needed or the manifest declares it as a project context file
-8. Respond with:
+5. Read the source agent manual handoff file first
+6. If the manual handoff is missing or clearly stale, read the source autosave handoff file
+7. Read the source session log only as low-level evidence
+8. Read `AGENTS.md` only when project-level rules are needed or the manifest declares it as a project context file
+9. Respond with:
    - imported goal
    - imported current state
    - risks or missing context
@@ -63,7 +64,7 @@ The `交棒` command does not need an agent suffix. The active agent identity de
 
 When the user asks for automatic handoff:
 
-1. Configure a local snapshot mechanism that writes to the active agent's handoff file
+1. Configure a local snapshot mechanism that writes to the active agent's `.auto.md` handoff file
 2. Use periodic snapshots as the baseline
 3. Keep the last manual `交棒` higher quality than automatic snapshots
 4. Never depend on network availability for the snapshot itself
@@ -87,6 +88,7 @@ skills/jiebang/scripts/jiebang.sh autosave cc
 skills/jiebang/scripts/jiebang.sh daemon-start cc 180
 skills/jiebang/scripts/jiebang.sh daemon-status
 skills/jiebang/scripts/jiebang.sh daemon-stop
+bash tests/test_jiebang.sh
 ```
 
 `brief <agent>` prints a compact import pack for manual or tool-assisted transfer.

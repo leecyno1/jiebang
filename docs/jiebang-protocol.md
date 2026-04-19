@@ -10,12 +10,12 @@
 
 因此本方案分两层：
 
-1. `.jiebang/manifest.yml`
-   作为接棒机制入口，声明 runtime 目录、代理代号和可选项目上下文文件。
+1. `skills/jiebang/assets/`
+   作为唯一 canonical scaffold source，包含 bootstrap 所需 manifest 和模板。
 2. `.jiebang/runtime/`
    作为动态上下文层，保存 handoff、决策、当前任务和各代理会话摘要。
 
-`AGENTS.md` 不是接棒协议的必需依赖。安装或初始化时可以选择写入一小段 hook，方便自动发现；但接棒流程本身必须能在没有 `AGENTS.md` 的项目中运行。
+仓库根目录下的 `.jiebang/` 是目标项目生成物，不应作为包的一部分长期版本化。`AGENTS.md` 不是接棒协议的必需依赖。安装或初始化时可以选择写入一小段 hook，方便自动发现；但接棒流程本身必须能在没有 `AGENTS.md` 的项目中运行。
 
 如果目标项目已有 `CLAUDE.md`、`AGENTS.md` 或其他代理配置文件，接棒工具必须默认只读不写。只有用户显式运行 `bootstrap --update-agents` 时，才允许在 `AGENTS.md` 追加带边界标记的 hook 块。不得重写、整理、合并、删除用户已有配置。
 
@@ -29,10 +29,11 @@
 2. 读取 `.jiebang/runtime/project.md`
 3. 读取 `.jiebang/runtime/current-task.md`
 4. 读取 `.jiebang/runtime/decision-log.md`
-5. 读取 `.jiebang/runtime/handoffs/cc.md`
-6. 如有必要，再读取 `.jiebang/runtime/sessions/cc.md`
-7. 只有需要项目级规则时，才读取 `AGENTS.md` 或 manifest 声明的项目上下文文件
-8. 输出一个简短的“已接棒上下文”摘要，再继续执行用户当前请求
+5. 优先读取 `.jiebang/runtime/handoffs/cc.md`
+6. 若 manual handoff 缺失或明显过期，则回退到 `.jiebang/runtime/handoffs/cc.auto.md`
+7. 如有必要，再读取 `.jiebang/runtime/sessions/cc.md`
+8. 只有需要项目级规则时，才读取 `AGENTS.md` 或 manifest 声明的项目上下文文件
+9. 输出一个简短的“已接棒上下文”摘要，再继续执行用户当前请求
 
 ### `接棒cx` / `接棒ag`
 
@@ -58,7 +59,7 @@
 自动交棒分两类：
 
 1. 周期快照
-   每隔固定时间把当前代理的状态写入自己的 handoff 文件。
+   每隔固定时间把当前代理的状态写入自己的 `.auto.md` handoff 文件。
 2. 事件快照
    在检测到任务目标变化、关键决策落地、文件修改列表变化时，立即更新一次 handoff。
 
@@ -71,9 +72,10 @@
 | `.jiebang/runtime/project.md` | 项目长期背景、范围、目标 |
 | `.jiebang/runtime/current-task.md` | 当前正在做的单一任务及成功标准 |
 | `.jiebang/runtime/decision-log.md` | 已冻结的重要决策和约束 |
-| `.jiebang/runtime/handoffs/cc.md` | Claude Code 对外可消费的最新交接包 |
-| `.jiebang/runtime/handoffs/cx.md` | Codex 对外可消费的最新交接包 |
-| `.jiebang/runtime/handoffs/ag.md` | Antigravity 对外可消费的最新交接包 |
+| `.jiebang/runtime/handoffs/cc.md` | Claude Code 的 authoritative manual handoff |
+| `.jiebang/runtime/handoffs/cx.md` | Codex 的 authoritative manual handoff |
+| `.jiebang/runtime/handoffs/ag.md` | Antigravity 的 authoritative manual handoff |
+| `.jiebang/runtime/handoffs/*.auto.md` | 自动交棒产生的 fallback snapshot |
 | `.jiebang/runtime/sessions/*.md` | 各代理更细粒度的工作日志，可选读取 |
 
 ## 5. Recommended Workflow
@@ -109,7 +111,7 @@ skills/jiebang/scripts/jiebang.sh daemon-stop
 
 ### C. 发生漂移时
 
-如果三个代理说法不一致，以 `.jiebang/runtime/handoffs/*.md` 中时间最新的条目为准，并人工修正冲突项。
+如果三个代理说法不一致，先看 manual handoff；若 manual 明显过期，再参考对应 `.auto.md`。session log 只用于追溯，不作为默认权威来源。
 
 ## 6. Important Limitation
 

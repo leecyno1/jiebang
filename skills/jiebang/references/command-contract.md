@@ -11,10 +11,11 @@
 For any `接棒xx` command, the agent should:
 
 1. Read the shared runtime files
-2. Read the source agent handoff packet
-3. State what was imported
-4. State what is still unknown
-5. Continue the user's requested task
+2. Read the source agent manual handoff packet first
+3. Fall back to the source agent autosave handoff when the manual handoff is missing or stale
+4. State what was imported and whether the source was manual or auto
+5. State what is still unknown
+6. Continue the user's requested task
 
 ## Export Commands
 
@@ -35,7 +36,7 @@ For `自动交棒`, the system should prefer:
 1. local writes
 2. periodic snapshots
 3. append-only session logging
-4. manual `交棒` overriding the latest auto snapshot summary
+4. manual `交棒` remaining authoritative over auto snapshots
 
 Example:
 

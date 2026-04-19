@@ -13,6 +13,7 @@ Jiebang solves this by externalizing the transferable state into project files:
 - Stable project configuration stays in the project’s native docs, such as `AGENTS.md`, `CLAUDE.md`, or `README.md`.
 - Dynamic handoff state lives in `.jiebang/runtime/`.
 - The skill reads only the small handoff files by default, and reads larger project docs only when needed.
+- The packaged skill under `skills/jiebang/` is the only canonical scaffold source; target-project `.jiebang/` files are generated locally by `bootstrap`.
 
 ## Features
 
@@ -85,7 +86,7 @@ All commands are run from the target project root:
 
 | Command | Purpose |
 |---|---|
-| `bootstrap` | Create `.jiebang/` scaffold and runtime files without touching native project instruction files. |
+| `bootstrap` | Create generated `.jiebang/` scaffold and runtime files from the packaged skill assets. |
 | `bootstrap --update-agents` | Also append a bounded Jiebang hook to `AGENTS.md`. |
 | `remove-agents-hook` | Remove only the bounded Jiebang hook block from `AGENTS.md`. |
 | `validate` | Confirm the required manifest and runtime files exist. |
@@ -131,7 +132,8 @@ The important runtime files are:
 | `.jiebang/runtime/project.md` | Durable project goal, scope, and constraints. |
 | `.jiebang/runtime/current-task.md` | Current active task and success criteria. |
 | `.jiebang/runtime/decision-log.md` | Durable decisions and deferred decisions. |
-| `.jiebang/runtime/handoffs/{cc,cx,ag}.md` | Short handoff packet for each agent. |
+| `.jiebang/runtime/handoffs/{cc,cx,ag}.md` | Manual handoff packet for each agent. |
+| `.jiebang/runtime/handoffs/{cc,cx,ag}.auto.md` | Automatic snapshot fallback for each agent. |
 | `.jiebang/runtime/sessions/{cc,cx,ag}.md` | More detailed fallback timeline for each agent. |
 
 ## Handoff Flow
@@ -159,9 +161,10 @@ The default read order is:
 2. `.jiebang/runtime/project.md`
 3. `.jiebang/runtime/current-task.md`
 4. `.jiebang/runtime/decision-log.md`
-5. `.jiebang/runtime/handoffs/<source>.md`
-6. `.jiebang/runtime/sessions/<source>.md` only if the handoff is too thin
-7. `AGENTS.md`, `CLAUDE.md`, or `README.md` only if project-level rules are needed
+5. `.jiebang/runtime/handoffs/<source>.md` as the authoritative manual handoff
+6. `.jiebang/runtime/handoffs/<source>.auto.md` only if the manual handoff is missing or clearly stale
+7. `.jiebang/runtime/sessions/<source>.md` only as low-level evidence
+8. `AGENTS.md`, `CLAUDE.md`, or `README.md` only if project-level rules are needed
 
 ## Token Strategy
 
@@ -171,7 +174,7 @@ Jiebang separates stable context from dynamic handoff state:
 - Runtime handoff files are small and task-specific.
 - Session logs are fallback context and should not be read by default.
 
-This keeps most handoffs cheap: agents read the manifest, current task, decision log, and one handoff packet before deciding whether larger docs are needed.
+This keeps most handoffs cheap: agents read the manifest, current task, decision log, and the authoritative handoff packet before deciding whether larger docs are needed.
 
 ## Safety Model
 
@@ -193,7 +196,7 @@ Jiebang is intentionally conservative:
 
 ## Autosave
 
-Manual `交棒` should produce the highest-quality summary. Autosave is a safety net.
+Manual `交棒` should produce the highest-quality summary and remains authoritative. Autosave is a safety net.
 
 Run one snapshot:
 
@@ -215,31 +218,27 @@ Run periodic autosave in the background:
 ~/.codex/skills/jiebang/scripts/jiebang.sh daemon-stop
 ```
 
-Autosave writes a machine-generated snapshot and appends a timeline entry to the selected agent’s session log.
+Autosave writes a machine-generated `.auto.md` snapshot and appends a timeline entry to the selected agent’s session log. It should never overwrite a manual handoff.
 
 ## Development
 
-Validate the current project:
+Validate a bootstrapped target project:
 
 ```bash
 skills/jiebang/scripts/jiebang.sh validate
 ```
 
-Test the skill as if it were globally installed:
+Run the integration suite for the packaged skill:
 
 ```bash
-tmp=$(mktemp -d)
-mkdir -p "$tmp/skill" "$tmp/project"
-cp -R skills/jiebang "$tmp/skill/"
-cd "$tmp/project"
-"$tmp/skill/jiebang/scripts/jiebang.sh" bootstrap
-"$tmp/skill/jiebang/scripts/jiebang.sh" validate
+bash tests/test_jiebang.sh
 ```
 
 ## Limitations
 
 - Handoff quality depends on agents writing useful summaries.
 - Autosave snapshots are intentionally conservative and may omit reasoning.
+- Automatic snapshots live in `.auto.md` files and are only used when the manual handoff is missing or stale.
 - Private chat memory from Claude Code, Codex, or Antigravity is not accessible unless an agent writes it into `.jiebang/`.
 - The current implementation is file-based and local-first; team synchronization should be handled separately through git or another collaboration layer.
 

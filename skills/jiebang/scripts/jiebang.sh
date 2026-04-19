@@ -9,6 +9,7 @@ ASSET_TEMPLATE_DIR="$ASSET_DIR/templates"
 MANIFEST="$ROOT/.jiebang/manifest.yml"
 TEMPLATE_DIR="$ROOT/.jiebang/templates"
 RUNTIME_DIR="$ROOT/.jiebang/runtime"
+MANUAL_STALE_SECONDS="${JIEBANG_MANUAL_STALE_SECONDS:-21600}"
 
 usage() {
   cat <<'EOF'
@@ -59,6 +60,11 @@ agent_file() {
   echo "$RUNTIME_DIR/handoffs/$agent.md"
 }
 
+auto_agent_file() {
+  local agent="$1"
+  echo "$RUNTIME_DIR/handoffs/$agent.auto.md"
+}
+
 session_file() {
   local agent="$1"
   echo "$RUNTIME_DIR/sessions/$agent.md"
@@ -81,6 +87,67 @@ validate_agent() {
       exit 1
       ;;
   esac
+}
+
+handoff_updated_at() {
+  local file="$1"
+  [ -f "$file" ] || return 0
+  awk '/^updated_at:/ { sub(/^updated_at:[[:space:]]*/, ""); print; exit }' "$file"
+}
+
+timestamp_to_epoch() {
+  local value="${1:-}"
+  if [ -z "$value" ] || [ "$value" = "YYYY-MM-DD HH:MM" ]; then
+    echo 0
+    return 0
+  fi
+
+  if date -j -f '%Y-%m-%d %H:%M' "$value" '+%s' >/dev/null 2>&1; then
+    date -j -f '%Y-%m-%d %H:%M' "$value" '+%s'
+    return 0
+  fi
+
+  if date -d "$value" '+%s' >/dev/null 2>&1; then
+    date -d "$value" '+%s'
+    return 0
+  fi
+
+  echo 0
+}
+
+handoff_epoch() {
+  local file="$1"
+  timestamp_to_epoch "$(handoff_updated_at "$file")"
+}
+
+select_authoritative_handoff() {
+  local agent="$1"
+  local manual_file auto_file manual_epoch auto_epoch
+  manual_file="$(agent_file "$agent")"
+  auto_file="$(auto_agent_file "$agent")"
+  manual_epoch="$(handoff_epoch "$manual_file")"
+  auto_epoch="$(handoff_epoch "$auto_file")"
+
+  if [ "$manual_epoch" -gt 0 ]; then
+    if [ "$auto_epoch" -gt 0 ] && [ $((auto_epoch - manual_epoch)) -ge "$MANUAL_STALE_SECONDS" ]; then
+      printf 'auto|%s|auto snapshot is newer than a stale manual handoff\n' "$auto_file"
+      return 0
+    fi
+    printf 'manual|%s|manual handoff present\n' "$manual_file"
+    return 0
+  fi
+
+  if [ "$auto_epoch" -gt 0 ]; then
+    printf 'auto|%s|manual handoff missing or uninitialized\n' "$auto_file"
+    return 0
+  fi
+
+  if [ -f "$manual_file" ]; then
+    printf 'manual|%s|manual handoff exists but is still a placeholder\n' "$manual_file"
+    return 0
+  fi
+
+  printf 'missing||no handoff files available\n'
 }
 
 init_runtime() {
@@ -181,9 +248,8 @@ autosave_agent() {
 
   local handoff
   local session
-  handoff="$(agent_file "$agent")"
+  handoff="$(auto_agent_file "$agent")"
   session="$(session_file "$agent")"
-  require_file "$handoff"
   require_file "$session"
 
   local now
@@ -292,19 +358,35 @@ daemon_stop() {
 
 brief_agent() {
   local agent="${1:-}"
+  local selection source handoff reason
   if [ -z "$agent" ]; then
     usage
     exit 1
   fi
 
   validate_agent "$agent"
+  selection="$(select_authoritative_handoff "$agent")"
+  source="${selection%%|*}"
+  selection="${selection#*|}"
+  handoff="${selection%%|*}"
+  reason="${selection#*|}"
+
+  if [ "$source" = "missing" ]; then
+    echo "No handoff files available for $agent" >&2
+    exit 1
+  fi
+
+  printf '===== authority =====\n'
+  printf 'authoritative_source: %s\n' "$source"
+  printf 'authoritative_file: %s\n' "${handoff#$ROOT/}"
+  printf 'selection_reason: %s\n\n' "$reason"
 
   for file in \
     "$MANIFEST" \
     "$RUNTIME_DIR/project.md" \
     "$RUNTIME_DIR/current-task.md" \
     "$RUNTIME_DIR/decision-log.md" \
-    "$RUNTIME_DIR/handoffs/$agent.md" \
+    "$handoff" \
     "$RUNTIME_DIR/sessions/$agent.md"; do
     if [ -f "$file" ]; then
       printf '\n===== %s =====\n' "${file#$ROOT/}"

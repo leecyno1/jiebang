@@ -1,4 +1,2 @@
-.jiebang/runtime/
-.jiebang/**/*.pid
-.jiebang/**/*.log
+.jiebang/
 .DS_Store
